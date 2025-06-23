@@ -10,27 +10,29 @@
 
     <a-spin :spinning="loading">
       <div v-if="documentStore.documents.length > 0" class="document-list">
-        <a-card
+        <div
           v-for="doc in documentStore.documents"
           :key="doc.id"
-          class="document-card"
+          class="document-card-wrapper"
         >
-          <template #cover>
-            <div class="document-cover">
-              <FileTextOutlined class="document-icon" />
-            </div>
-          </template>
-          <a-card-meta :title="doc.title">
-            <template #description>
-              <p>创建时间: {{ formatDate(doc.createdAt) }}</p>
-              <p>更新时间: {{ formatDate(doc.updatedAt) }}</p>
+          <a-card
+            class="document-card"
+            hoverable
+            @click="openDocument(doc.id)"
+          >
+            <template #cover>
+              <div class="document-cover">
+                <FileTextOutlined class="document-icon" />
+              </div>
             </template>
-          </a-card-meta>
-          <div class="document-actions">
-            <a-button type="primary" @click.stop="openDocument(doc.id)">
-              打开
-              <template #icon><EditOutlined /></template>
-            </a-button>
+            <a-card-meta :title="doc.title">
+              <template #description>
+                <p>创建时间: {{ formatDate(doc.createdAt) }}</p>
+                <p>更新时间: {{ formatDate(doc.updatedAt) }}</p>
+              </template>
+            </a-card-meta>
+          </a-card>
+          <div class="document-delete-btn">
             <a-popconfirm
               title="确定要删除这个文档吗？"
               description="删除后将无法恢复"
@@ -38,13 +40,10 @@
               ok-text="确定"
               cancel-text="取消"
             >
-              <a-button type="primary" danger @click.stop>
-                删除
-                <template #icon><DeleteOutlined /></template>
-              </a-button>
+              <DeleteOutlined class="delete-icon" />
             </a-popconfirm>
           </div>
-        </a-card>
+        </div>
       </div>
 
       <a-empty v-else description="暂无文档，点击右上角创建新文档">
@@ -73,12 +72,12 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDocumentStore } from '@/stores/document'
-import { PlusOutlined, FileTextOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, FileTextOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 
 const router = useRouter()
 const documentStore = useDocumentStore()
-const { loading, fetchDocuments, createDocument: storeCreateDocument, deleteDocument } = documentStore
+const { loading, fetchDocuments, createDocument: storeCreateDocument } = documentStore
 
 const createModalVisible = ref(false)
 const creating = ref(false)
@@ -133,7 +132,7 @@ const openDocument = (id: string) => {
 
 const confirmDelete = async (id: string) => {
   try {
-    const success = await deleteDocument(id)
+    const success = await documentStore.deleteDocument(id)
     if (success) {
       message.success('文档删除成功')
     } else {
@@ -167,10 +166,14 @@ onMounted(() => {
   @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
 }
 
+.document-card-wrapper {
+  @apply relative;
+}
+
 .document-card {
-  @apply transition-all duration-300;
+  @apply cursor-pointer transition-all duration-300 shadow-sm;
   &:hover {
-    @apply transform -translate-y-1;
+    @apply transform -translate-y-1 shadow-md;
   }
 }
 
@@ -182,8 +185,18 @@ onMounted(() => {
   @apply text-4xl text-gray-500;
 }
 
-.document-actions {
-  @apply flex justify-between mt-4 gap-2;
+.document-delete-btn {
+  @apply absolute top-2 right-2 z-10 opacity-0 transition-opacity duration-200;
+  .document-card-wrapper:hover & {
+    @apply opacity-100;
+  }
+}
+
+.delete-icon {
+  @apply text-lg p-2 rounded-full bg-white text-red-500 shadow-sm cursor-pointer;
+  &:hover {
+    @apply bg-red-50;
+  }
 }
 
 .document-id {

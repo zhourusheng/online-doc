@@ -15,10 +15,7 @@
           ok-text="确定"
           cancel-text="取消"
         >
-          <a-button type="primary" danger>
-            删除文档
-            <template #icon><DeleteOutlined /></template>
-          </a-button>
+          <DeleteOutlined class="delete-icon" />
         </a-popconfirm>
       </div>
     </div>
@@ -33,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDocumentStore } from '@/stores/document'
 import { ArrowLeftOutlined, DeleteOutlined } from '@ant-design/icons-vue'
@@ -43,7 +40,7 @@ import { message } from 'ant-design-vue'
 const route = useRoute()
 const router = useRouter()
 const documentStore = useDocumentStore()
-const { fetchDocument, currentDocument, loading, deleteDocument } = documentStore
+const { fetchDocument, loading } = documentStore
 
 const documentId = computed(() => route.params.id as string)
 
@@ -55,7 +52,7 @@ const confirmDelete = async () => {
   if (!documentId.value) return
   
   try {
-    const success = await deleteDocument(documentId.value)
+    const success = await documentStore.deleteDocument(documentId.value)
     if (success) {
       message.success('文档删除成功')
       router.push('/')
@@ -86,5 +83,12 @@ onMounted(async () => {
 
 .nav-left, .nav-right {
   @apply flex items-center gap-2;
+}
+
+.delete-icon {
+  @apply text-lg p-2 rounded-full bg-white text-red-500 shadow-sm cursor-pointer;
+  &:hover {
+    @apply bg-red-50;
+  }
 }
 </style> 
