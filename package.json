@@ -1,0 +1,24 @@
+{
+  "name": "online-doc",
+  "version": "1.0.0",
+  "description": "协同文档编辑系统",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "cd frontend && pnpm dev",
+    "dev:backend": "cd backend && pnpm dev",
+    "dev": "pnpm --parallel run dev",
+    "build:frontend": "cd frontend && pnpm build",
+    "build:backend": "cd backend && pnpm build",
+    "build": "pnpm --recursive run build",
+    "start": "cd backend && pnpm start"
+  },
+  "keywords": [
+    "collaborative",
+    "editor",
+    "yjs",
+    "tiptap",
+    "vue"
+  ],
+  "author": "",
+  "license": "ISC"
+} 
