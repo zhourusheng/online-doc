@@ -87,10 +87,8 @@ const updateTitle = async () => {
       if (documentStore.currentDocument) {
         documentStore.currentDocument.title = title.value;
       }
-      
-      console.log('标题更新成功:', title.value);
     } catch (error) {
-      console.error('更新标题失败:', error);
+      // 错误处理
     }
   }
 }
@@ -143,7 +141,8 @@ onMounted(() => {
       StarterKit.configure({
         document: false,
         paragraph: false,
-        text: false
+        text: false,
+        history: false
       }),
       Collaboration.configure({
         document: ydoc,

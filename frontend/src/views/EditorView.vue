@@ -60,7 +60,6 @@ const confirmDelete = async () => {
       message.error('文档删除失败')
     }
   } catch (error) {
-    console.error('删除文档出错:', error)
     message.error('删除文档时发生错误')
   }
 }

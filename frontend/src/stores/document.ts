@@ -28,10 +28,8 @@ export const useDocumentStore = defineStore('document', () => {
     try {
       const response = await fetch('/api/documents')
       const data = await response.json()
-      console.log('后端返回的原始数据:', data)
       
       if (!Array.isArray(data)) {
-        console.error('后端返回的数据不是数组:', data)
         return
       }
       
@@ -49,7 +47,6 @@ export const useDocumentStore = defineStore('document', () => {
             createdAt: new Date(doc.createdAt || Date.now()),
             updatedAt: new Date(doc.updatedAt || Date.now())
           }
-          console.log('转换后的文档:', transformed)
           return transformed
         })
       
@@ -57,11 +54,8 @@ export const useDocumentStore = defineStore('document', () => {
       transformedDocs.forEach(doc => {
         documents.value.push(doc)
       })
-      
-      console.log('最终的文档列表:', documents.value)
-      console.log('文档数量:', documents.value.length)
     } catch (error) {
-      console.error('获取文档列表失败:', error)
+      // 错误处理
     } finally {
       loading.value = false
     }
@@ -74,7 +68,6 @@ export const useDocumentStore = defineStore('document', () => {
       const doc = await response.json() as ApiDocument
       
       if (!doc || !doc._id) {
-        console.error('获取文档失败: 无效的文档数据', doc)
         return
       }
       
@@ -85,10 +78,8 @@ export const useDocumentStore = defineStore('document', () => {
         createdAt: new Date(doc.createdAt || Date.now()),
         updatedAt: new Date(doc.updatedAt || Date.now())
       }
-      
-      console.log('获取到的文档:', currentDocument.value)
     } catch (error) {
-      console.error('获取文档失败:', error)
+      // 错误处理
     } finally {
       loading.value = false
     }
@@ -107,7 +98,6 @@ export const useDocumentStore = defineStore('document', () => {
       const doc = await response.json() as ApiDocument
       
       if (!doc || !doc._id) {
-        console.error('创建文档失败: 无效的文档数据', doc)
         return null
       }
       
@@ -120,10 +110,8 @@ export const useDocumentStore = defineStore('document', () => {
       }
       
       documents.value.push(newDoc)
-      console.log('创建的新文档:', newDoc)
       return newDoc
     } catch (error) {
-      console.error('创建文档失败:', error)
       return null
     } finally {
       loading.value = false
@@ -149,7 +137,6 @@ export const useDocumentStore = defineStore('document', () => {
       
       return true
     } catch (error) {
-      console.error('删除文档失败:', error)
       return false
     } finally {
       loading.value = false

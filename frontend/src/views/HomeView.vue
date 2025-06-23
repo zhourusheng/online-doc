@@ -122,7 +122,6 @@ const createDocument = async () => {
 
 const openDocument = (id: string) => {
   if (!id) {
-    console.error('文档ID为空')
     message.error('文档ID无效，无法打开')
     return
   }
@@ -139,7 +138,6 @@ const confirmDelete = async (id: string) => {
       message.error('文档删除失败')
     }
   } catch (error) {
-    console.error('删除文档出错:', error)
     message.error('删除文档时发生错误')
   }
 }
