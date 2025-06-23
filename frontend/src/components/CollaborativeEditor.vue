@@ -40,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, onUnmounted, defineProps, watch } from 'vue'
+import { onMounted, ref, onUnmounted, defineProps, watch, nextTick } from 'vue'
 import { Editor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Document from '@tiptap/extension-document'
@@ -68,6 +68,8 @@ const connectedUsers = ref<{ name: string; color: string; isSelf: boolean }[]>([
 const documentStore = useDocumentStore()
 const userStore = useUserStore()
 const connectionError = ref<string | null>(null)
+// 生成唯一的客户端ID，用于区分同一用户的不同会话
+const clientId = ref(`${Date.now()}-${Math.floor(Math.random() * 1000)}`)
 
 // 随机生成颜色
 const getRandomColor = () => {
@@ -120,7 +122,8 @@ const setupWebSocketConnection = () => {
       {
         // 将用户认证信息添加到WebSocket连接
         params: {
-          token: userStore.token
+          token: userStore.token,
+          clientId: clientId.value // 添加客户端ID
         }
       }
     )
@@ -154,11 +157,15 @@ const setupWebSocketConnection = () => {
       connectionError.value = '连接服务器失败，请稍后再试'
     })
 
-    // 监听连接状态变化
+    // 清除所有现有的awareness状态
+    provider.awareness.setLocalState(null)
+
+    // 设置当前用户的状态
     provider.awareness.setLocalStateField('user', {
       name: username,
       color: userColor,
-      isSelf: true
+      isSelf: true,
+      clientId: clientId.value // 添加客户端ID以区分同一用户的不同会话
     })
 
     // 监听在线用户变化
@@ -169,10 +176,17 @@ const setupWebSocketConnection = () => {
       provider.awareness.getStates().forEach((state: any) => {
         if (state.user && state.user.name) {
           // 检查是否是当前用户
-          const isSelf = state.user.name === username;
+          const isSelf = state.user.clientId === clientId.value;
           
-          // 使用用户名作为键，如果有重复的用户名，后面的会覆盖前面的
-          userMap.set(state.user.name, {
+          // 使用clientId作为键，确保同一用户的不同会话被视为不同用户
+          const mapKey = state.user.clientId || state.user.name;
+          
+          // 如果是自己的光标，但不是当前会话，则跳过
+          if (state.user.name === username && !isSelf) {
+            return;
+          }
+          
+          userMap.set(mapKey, {
             name: state.user.name,
             color: state.user.color,
             isSelf
@@ -202,6 +216,11 @@ const setupWebSocketConnection = () => {
     connectionError.value = '连接服务器失败，请稍后再试'
     return false
   }
+}
+
+// 检测浏览器类型
+const isFirefox = () => {
+  return navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
 }
 
 onMounted(() => {
@@ -239,18 +258,45 @@ onMounted(() => {
         user: {
           name: username,
           color: userColor,
-          isSelf: true
+          isSelf: true,
+          clientId: clientId.value
+        },
+        // Firefox特定配置
+        render: (user) => {
+          // 如果是Firefox并且是自己的光标，则不渲染
+          if (isFirefox() && user.clientId === clientId.value) {
+            return {}
+          }
+          return {}; // 使用默认渲染
         }
       })
     ],
     autofocus: true,
   })
+  
+  // 在Firefox中，需要特别处理光标
+  if (isFirefox()) {
+    // 延迟一下，确保编辑器已经初始化
+    nextTick(() => {
+      // 清除可能存在的旧光标
+      const oldCursors = document.querySelectorAll(`.collaboration-cursor__caret[data-user-name="${username}"]`);
+      oldCursors.forEach(cursor => {
+        if (cursor.parentNode) {
+          cursor.parentNode.removeChild(cursor);
+        }
+      });
+    });
+  }
 })
 
 onUnmounted(() => {
   // 清理资源
-  editor.value?.destroy()
-  provider?.destroy()
+  if (provider) {
+    // 清除当前用户的状态
+    provider.awareness.setLocalState(null);
+    provider.destroy();
+  }
+  editor.value?.destroy();
 })
 
 // 监听当前文档变化
@@ -263,19 +309,14 @@ watch(() => documentStore.currentDocument, (newDoc) => {
 watch(() => props.documentId, () => {
   // 文档ID变化时重新连接
   if (provider) {
-    provider.disconnect()
+    // 清除当前用户的状态
+    provider.awareness.setLocalState(null);
+    provider.disconnect();
     
     // 重新设置WebSocket连接
     if (!setupWebSocketConnection()) {
       return // 如果连接失败，不继续处理
     }
-    
-    // 重新设置用户信息
-    provider.awareness.setLocalStateField('user', {
-      name: username,
-      color: userColor,
-      isSelf: true
-    })
   }
 })
 </script>
