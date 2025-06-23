@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useUserStore } from './user'
+import { message } from 'ant-design-vue'
 
 interface Document {
   id: string
@@ -23,16 +24,24 @@ export const useDocumentStore = defineStore('document', () => {
   const documents = ref<Document[]>([])
   const currentDocument = ref<Document | null>(null)
   const loading = ref(false)
+  const error = ref<string | null>(null)
   const userStore = useUserStore()
 
   const fetchDocuments = async () => {
     loading.value = true
+    error.value = null
     try {
       const response = await fetch('/api/documents', {
         headers: {
           ...userStore.getAuthHeader()
         }
       })
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '获取文档列表失败');
+      }
+      
       const data = await response.json()
       
       if (!Array.isArray(data)) {
@@ -60,25 +69,34 @@ export const useDocumentStore = defineStore('document', () => {
       transformedDocs.forEach(doc => {
         documents.value.push(doc)
       })
-    } catch (error) {
-      // 错误处理
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '获取文档列表失败';
+      error.value = errorMessage;
+      message.error(errorMessage);
     } finally {
       loading.value = false
     }
   }
 
-  const fetchDocument = async (id: string) => {
+  const fetchDocument = async (id: string): Promise<boolean> => {
     loading.value = true
+    error.value = null
     try {
       const response = await fetch(`/api/documents/${id}`, {
         headers: {
           ...userStore.getAuthHeader()
         }
       })
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '获取文档失败');
+      }
+      
       const doc = await response.json() as ApiDocument
       
       if (!doc || !doc._id) {
-        return
+        throw new Error('文档数据不完整');
       }
       
       currentDocument.value = {
@@ -88,8 +106,14 @@ export const useDocumentStore = defineStore('document', () => {
         createdAt: new Date(doc.createdAt || Date.now()),
         updatedAt: new Date(doc.updatedAt || Date.now())
       }
-    } catch (error) {
-      // 错误处理
+      
+      return true; // 成功获取文档
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '获取文档失败';
+      error.value = errorMessage;
+      message.error(errorMessage);
+      currentDocument.value = null;
+      return false; // 获取文档失败
     } finally {
       loading.value = false
     }
@@ -97,6 +121,7 @@ export const useDocumentStore = defineStore('document', () => {
 
   const createDocument = async (title: string) => {
     loading.value = true
+    error.value = null
     try {
       const response = await fetch('/api/documents', {
         method: 'POST',
@@ -106,10 +131,16 @@ export const useDocumentStore = defineStore('document', () => {
         },
         body: JSON.stringify({ title })
       })
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '创建文档失败');
+      }
+      
       const doc = await response.json() as ApiDocument
       
       if (!doc || !doc._id) {
-        return null
+        throw new Error('创建文档失败，返回数据不完整');
       }
       
       const newDoc: Document = {
@@ -122,7 +153,10 @@ export const useDocumentStore = defineStore('document', () => {
       
       documents.value.push(newDoc)
       return newDoc
-    } catch (error) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '创建文档失败';
+      error.value = errorMessage;
+      message.error(errorMessage);
       return null
     } finally {
       loading.value = false
@@ -131,6 +165,7 @@ export const useDocumentStore = defineStore('document', () => {
 
   const deleteDocument = async (id: string) => {
     loading.value = true
+    error.value = null
     try {
       const response = await fetch(`/api/documents/${id}`, {
         method: 'DELETE',
@@ -140,7 +175,8 @@ export const useDocumentStore = defineStore('document', () => {
       })
       
       if (!response.ok) {
-        throw new Error('删除文档失败')
+        const errorData = await response.json();
+        throw new Error(errorData.message || '删除文档失败');
       }
       
       // 从本地列表中删除文档
@@ -150,10 +186,51 @@ export const useDocumentStore = defineStore('document', () => {
       }
       
       return true
-    } catch (error) {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '删除文档失败';
+      error.value = errorMessage;
+      message.error(errorMessage);
       return false
     } finally {
       loading.value = false
+    }
+  }
+
+  // 更新文档标题
+  const updateDocumentTitle = async (id: string, title: string) => {
+    error.value = null
+    try {
+      const response = await fetch(`/api/documents/${id}`, { 
+        method: 'PUT', 
+        headers: { 
+          'Content-Type': 'application/json',
+          ...userStore.getAuthHeader()
+        }, 
+        body: JSON.stringify({ title }) 
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '更新标题失败');
+      }
+      
+      // 更新本地存储的文档标题
+      if (currentDocument.value && currentDocument.value.id === id) {
+        currentDocument.value.title = title;
+      }
+      
+      // 更新文档列表中的标题
+      const docIndex = documents.value.findIndex(doc => doc.id === id);
+      if (docIndex !== -1) {
+        documents.value[docIndex].title = title;
+      }
+      
+      return true;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '更新标题失败';
+      error.value = errorMessage;
+      message.error(errorMessage);
+      return false;
     }
   }
 
@@ -161,9 +238,11 @@ export const useDocumentStore = defineStore('document', () => {
     documents,
     currentDocument,
     loading,
+    error,
     fetchDocuments,
     fetchDocument,
     createDocument,
-    deleteDocument
+    deleteDocument,
+    updateDocumentTitle
   }
 }) 

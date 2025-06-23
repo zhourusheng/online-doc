@@ -8,21 +8,31 @@
         @change="updateTitle"
       />
       <div class="editor-users">
-        <a-avatar
-          v-for="(user, index) in connectedUsers"
-          :key="index"
-          :style="{ backgroundColor: user.color }"
-          size="small"
-          class="user-avatar"
-        >
-          {{ user.name[0] }}
-        </a-avatar>
+        <a-tooltip v-for="(user, index) in connectedUsers" :key="index" :title="user.name + (user.isSelf ? ' (你)' : '')">
+          <a-avatar
+            :style="{ backgroundColor: user.color }"
+            size="small"
+            class="user-avatar"
+            :class="{ 'self-user': user.isSelf }"
+          >
+            {{ user.name[0] }}
+          </a-avatar>
+        </a-tooltip>
         <a-badge :count="connectedUsers.length" size="small">
           <a-button type="text" size="small">
             <template #icon><UserOutlined /></template>
           </a-button>
         </a-badge>
       </div>
+    </div>
+
+    <div v-if="connectionError" class="connection-error">
+      <a-alert
+        message="连接错误"
+        :description="connectionError"
+        type="error"
+        show-icon
+      />
     </div>
 
     <div ref="editorEl" class="editor-content"></div>
@@ -43,17 +53,21 @@ import { WebsocketProvider } from 'y-websocket'
 import { UserOutlined } from '@ant-design/icons-vue'
 import { useDocumentStore } from '@/stores/document'
 import { useUserStore } from '@/stores/user'
+import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
 
 const props = defineProps<{
   documentId: string
 }>()
 
+const router = useRouter()
 const editorEl = ref<HTMLElement | null>(null)
 const title = ref('')
 const editor = ref<Editor | null>(null)
-const connectedUsers = ref<{ name: string; color: string }[]>([])
+const connectedUsers = ref<{ name: string; color: string; isSelf: boolean }[]>([])
 const documentStore = useDocumentStore()
 const userStore = useUserStore()
+const connectionError = ref<string | null>(null)
 
 // 随机生成颜色
 const getRandomColor = () => {
@@ -75,24 +89,118 @@ const updateTitle = async () => {
   // 保存标题到服务器
   if (props.documentId && title.value) {
     try {
-      // 调用API更新标题
-      const response = await fetch(`/api/documents/${props.documentId}`, { 
-        method: 'PUT', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ title: title.value }) 
-      });
-      
-      if (!response.ok) {
-        throw new Error('更新标题失败');
-      }
-      
-      // 更新本地存储的文档标题
-      if (documentStore.currentDocument) {
-        documentStore.currentDocument.title = title.value;
+      const success = await documentStore.updateDocumentTitle(props.documentId, title.value)
+      if (!success) {
+        // 如果更新失败，恢复原来的标题
+        if (documentStore.currentDocument) {
+          title.value = documentStore.currentDocument.title
+        }
       }
     } catch (error) {
-      // 错误处理
+      console.error('更新标题失败:', error)
     }
+  }
+}
+
+const setupWebSocketConnection = () => {
+  if (!userStore.token) {
+    connectionError.value = '您需要登录才能访问此文档'
+    return false
+  }
+
+  try {
+    // 创建 Y.js 文档
+    ydoc = new Y.Doc()
+    
+    // 连接到 WebSocket 服务器
+    provider = new WebsocketProvider(
+      'ws://localhost:3001', 
+      `document-${props.documentId}`, 
+      ydoc,
+      {
+        // 将用户认证信息添加到WebSocket连接
+        params: {
+          token: userStore.token
+        }
+      }
+    )
+
+    // 监听连接状态
+    provider.on('status', (event: { status: string }) => {
+      if (event.status === 'disconnected') {
+        connectionError.value = '与服务器的连接已断开'
+      } else if (event.status === 'connected') {
+        connectionError.value = null
+      }
+    })
+
+    // 监听连接错误
+    provider.on('connection-error', (event: any) => {
+      console.error('WebSocket连接错误:', event)
+      
+      // 如果是权限错误，则显示相应的消息
+      if (event && event.code === 1000 && (event.reason === '未经授权' || event.reason === '无效的token')) {
+        connectionError.value = '您没有权限访问此文档'
+        message.error('您没有权限访问此文档')
+        
+        // 3秒后返回文档列表
+        setTimeout(() => {
+          router.push('/')
+        }, 3000)
+        
+        return false
+      }
+      
+      connectionError.value = '连接服务器失败，请稍后再试'
+    })
+
+    // 监听连接状态变化
+    provider.awareness.setLocalStateField('user', {
+      name: username,
+      color: userColor,
+      isSelf: true
+    })
+
+    // 监听在线用户变化
+    provider.awareness.on('change', () => {
+      // 使用Map来存储用户，确保每个用户名只出现一次
+      const userMap = new Map<string, { name: string; color: string; isSelf: boolean }>();
+      
+      provider.awareness.getStates().forEach((state: any) => {
+        if (state.user && state.user.name) {
+          // 检查是否是当前用户
+          const isSelf = state.user.name === username;
+          
+          // 使用用户名作为键，如果有重复的用户名，后面的会覆盖前面的
+          userMap.set(state.user.name, {
+            name: state.user.name,
+            color: state.user.color,
+            isSelf
+          });
+        }
+      });
+      
+      // 将Map转换回数组，并确保当前用户排在最前面
+      const users = Array.from(userMap.values());
+      users.sort((a, b) => {
+        // 当前用户排在最前面
+        if (a.isSelf) return -1;
+        if (b.isSelf) return 1;
+        // 其他用户按名称字母顺序排序
+        return a.name.localeCompare(b.name);
+      });
+      
+      connectedUsers.value = users;
+      
+      // 调试信息
+      console.log('当前在线用户:', connectedUsers.value.map(u => u.name + (u.isSelf ? ' (你)' : '')).join(', '));
+    })
+
+    return true
+  } catch (error) {
+    console.error('设置WebSocket连接时出错:', error)
+    connectionError.value = '连接服务器失败，请稍后再试'
+    return false
   }
 }
 
@@ -104,41 +212,10 @@ onMounted(() => {
     title.value = documentStore.currentDocument.title
   }
 
-  // 创建 Y.js 文档
-  ydoc = new Y.Doc()
-  
-  // 连接到 WebSocket 服务器
-  provider = new WebsocketProvider(
-    'ws://localhost:3001', 
-    `document-${props.documentId}`, 
-    ydoc,
-    {
-      // 将用户认证信息添加到WebSocket连接
-      params: {
-        token: userStore.token || ''
-      }
-    }
-  )
-
-  // 监听连接状态变化
-  provider.awareness.setLocalStateField('user', {
-    name: username,
-    color: userColor
-  })
-
-  // 监听在线用户变化
-  provider.awareness.on('change', () => {
-    const users: { name: string; color: string }[] = []
-    provider.awareness.getStates().forEach((state: any) => {
-      if (state.user) {
-        users.push({
-          name: state.user.name,
-          color: state.user.color
-        })
-      }
-    })
-    connectedUsers.value = users
-  })
+  // 设置WebSocket连接
+  if (!setupWebSocketConnection()) {
+    return // 如果连接失败，不初始化编辑器
+  }
 
   // 初始化编辑器
   editor.value = new Editor({
@@ -161,7 +238,8 @@ onMounted(() => {
         provider,
         user: {
           name: username,
-          color: userColor
+          color: userColor,
+          isSelf: true
         }
       })
     ],
@@ -186,22 +264,17 @@ watch(() => props.documentId, () => {
   // 文档ID变化时重新连接
   if (provider) {
     provider.disconnect()
-    provider = new WebsocketProvider(
-      'ws://localhost:3001', 
-      `document-${props.documentId}`, 
-      ydoc,
-      {
-        // 将用户认证信息添加到WebSocket连接
-        params: {
-          token: userStore.token || ''
-        }
-      }
-    )
+    
+    // 重新设置WebSocket连接
+    if (!setupWebSocketConnection()) {
+      return // 如果连接失败，不继续处理
+    }
     
     // 重新设置用户信息
     provider.awareness.setLocalStateField('user', {
       name: username,
-      color: userColor
+      color: userColor,
+      isSelf: true
     })
   }
 })
@@ -227,9 +300,17 @@ watch(() => props.documentId, () => {
 
 .user-avatar {
   @apply mr-1;
+  
+  &.self-user {
+    @apply border-2 border-blue-500;
+  }
 }
 
 .editor-content {
   min-height: 500px;
+}
+
+.connection-error {
+  @apply mb-4;
 }
 </style> 

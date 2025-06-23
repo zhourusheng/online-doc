@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IDocument extends Document {
   title: string;
   content: string;
+  owner: mongoose.Schema.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,6 +19,10 @@ const DocumentSchema: Schema = new Schema(
     content: {
       type: String,
       default: '',
+    },
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
     },
   },
   {

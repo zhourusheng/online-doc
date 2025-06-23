@@ -7,7 +7,7 @@
           <span class="button-text">返回列表</span>
         </a-button>
       </div>
-      <div class="nav-right">
+      <div class="nav-right" v-if="hasAccess">
         <a-popconfirm
           title="确定要删除这个文档吗？"
           description="删除后将无法恢复"
@@ -21,8 +21,21 @@
     </div>
     
     <a-spin :spinning="loading" tip="加载文档中...">
+      <div v-if="!hasAccess && !loading" class="error-container">
+        <a-result
+          status="403"
+          title="没有访问权限"
+          sub-title="您没有权限访问此文档，或者文档不存在"
+        >
+          <template #extra>
+            <a-button type="primary" @click="goBack">
+              返回文档列表
+            </a-button>
+          </template>
+        </a-result>
+      </div>
       <collaborative-editor 
-        v-if="!loading && documentId" 
+        v-else-if="!loading && documentId && hasAccess" 
         :document-id="documentId"
       />
     </a-spin>
@@ -30,26 +43,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDocumentStore } from '@/stores/document'
 import { ArrowLeftOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import CollaborativeEditor from '@/components/CollaborativeEditor.vue'
-import { message } from 'ant-design-vue'
+import { message, Result, Button, Spin } from 'ant-design-vue'
 
 const route = useRoute()
 const router = useRouter()
 const documentStore = useDocumentStore()
-const { fetchDocument, loading } = documentStore
+const { fetchDocument, loading, error } = documentStore
 
 const documentId = computed(() => route.params.id as string)
+const hasAccess = ref(false)
 
 const goBack = () => {
   router.push('/')
 }
 
 const confirmDelete = async () => {
-  if (!documentId.value) return
+  if (!documentId.value || !hasAccess.value) return
   
   try {
     const success = await documentStore.deleteDocument(documentId.value)
@@ -66,7 +80,15 @@ const confirmDelete = async () => {
 
 onMounted(async () => {
   if (documentId.value) {
-    await fetchDocument(documentId.value)
+    // 尝试获取文档，并根据结果设置访问权限
+    const success = await fetchDocument(documentId.value)
+    hasAccess.value = success
+    
+    // 如果没有访问权限，显示错误信息
+    if (!success) {
+      console.log('没有权限访问此文档或文档不存在')
+      message.error('没有权限访问此文档或文档不存在')
+    }
   }
 })
 </script>
@@ -99,5 +121,9 @@ onMounted(async () => {
   &:hover {
     @apply bg-red-50;
   }
+}
+
+.error-container {
+  @apply py-8;
 }
 </style> 
