@@ -42,6 +42,7 @@ import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket'
 import { UserOutlined } from '@ant-design/icons-vue'
 import { useDocumentStore } from '@/stores/document'
+import { useUserStore } from '@/stores/user'
 
 const props = defineProps<{
   documentId: string
@@ -52,6 +53,7 @@ const title = ref('')
 const editor = ref<Editor | null>(null)
 const connectedUsers = ref<{ name: string; color: string }[]>([])
 const documentStore = useDocumentStore()
+const userStore = useUserStore()
 
 // 随机生成用户名和颜色
 const getRandomColor = () => {
@@ -108,7 +110,13 @@ onMounted(() => {
   provider = new WebsocketProvider(
     'ws://localhost:3001', 
     `document-${props.documentId}`, 
-    ydoc
+    ydoc,
+    {
+      // 将用户认证信息添加到WebSocket连接
+      params: {
+        token: userStore.token || ''
+      }
+    }
   )
 
   // 监听连接状态变化
@@ -180,7 +188,13 @@ watch(() => props.documentId, () => {
     provider = new WebsocketProvider(
       'ws://localhost:3001', 
       `document-${props.documentId}`, 
-      ydoc
+      ydoc,
+      {
+        // 将用户认证信息添加到WebSocket连接
+        params: {
+          token: userStore.token || ''
+        }
+      }
     )
   }
 })

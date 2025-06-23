@@ -1,11 +1,18 @@
 import express from 'express';
 import http from 'http';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
 // @ts-ignore
 import { setupWSConnection } from 'y-websocket/bin/utils';
 import mongoose from 'mongoose';
 import { documentRouter } from './routes/document';
+import { authRouter } from './routes/auth';
+import { optionalAuthMiddleware } from './middleware/auth';
+import jwt from 'jsonwebtoken';
+import url from 'url';
+
+// JWT密钥
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // 创建Express应用
 const app = express();
@@ -17,7 +24,8 @@ app.use(cors());
 app.use(express.json());
 
 // 路由
-app.use('/api/documents', documentRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/documents', optionalAuthMiddleware, documentRouter);
 
 // 健康检查
 app.get('/api/health', (req: express.Request, res: express.Response) => {
@@ -27,10 +35,32 @@ app.get('/api/health', (req: express.Request, res: express.Response) => {
 // 创建HTTP服务器
 const server = http.createServer(app);
 
+// 扩展WebSocket类型
+interface AuthenticatedWebSocket extends WebSocket {
+  user?: any;
+}
+
 // 创建WebSocket服务器
 const wss = new WebSocketServer({ server });
 
-wss.on('connection', (conn, req) => {
+wss.on('connection', (conn: AuthenticatedWebSocket, req) => {
+  // 获取token
+  const urlParams = url.parse(req.url || '', true).query;
+  const token = urlParams.token as string;
+  
+  // 可选的认证验证
+  if (token) {
+    try {
+      // 验证token
+      const decoded = jwt.verify(token, JWT_SECRET);
+      // 可以将用户信息添加到连接对象
+      conn.user = decoded;
+    } catch (error) {
+      // token无效，但仍允许连接（只是不设置用户信息）
+      console.log('WebSocket连接使用了无效的token');
+    }
+  }
+  
   // 设置Y.js WebSocket连接
   setupWSConnection(conn, req, {
     // 可以在这里添加Y.js的选项

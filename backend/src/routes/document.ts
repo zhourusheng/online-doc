@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import Document from '../models/Document';
 
-const router = Router();
+const router: Router = Router();
 
 // 内存存储，用于在没有MongoDB的情况下运行
 const inMemoryDocuments: any[] = [];

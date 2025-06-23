@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { useUserStore } from './user'
 
 interface Document {
   id: string
@@ -22,11 +23,16 @@ export const useDocumentStore = defineStore('document', () => {
   const documents = ref<Document[]>([])
   const currentDocument = ref<Document | null>(null)
   const loading = ref(false)
+  const userStore = useUserStore()
 
   const fetchDocuments = async () => {
     loading.value = true
     try {
-      const response = await fetch('/api/documents')
+      const response = await fetch('/api/documents', {
+        headers: {
+          ...userStore.getAuthHeader()
+        }
+      })
       const data = await response.json()
       
       if (!Array.isArray(data)) {
@@ -64,7 +70,11 @@ export const useDocumentStore = defineStore('document', () => {
   const fetchDocument = async (id: string) => {
     loading.value = true
     try {
-      const response = await fetch(`/api/documents/${id}`)
+      const response = await fetch(`/api/documents/${id}`, {
+        headers: {
+          ...userStore.getAuthHeader()
+        }
+      })
       const doc = await response.json() as ApiDocument
       
       if (!doc || !doc._id) {
@@ -91,7 +101,8 @@ export const useDocumentStore = defineStore('document', () => {
       const response = await fetch('/api/documents', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...userStore.getAuthHeader()
         },
         body: JSON.stringify({ title })
       })
@@ -122,7 +133,10 @@ export const useDocumentStore = defineStore('document', () => {
     loading.value = true
     try {
       const response = await fetch(`/api/documents/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          ...userStore.getAuthHeader()
+        }
       })
       
       if (!response.ok) {

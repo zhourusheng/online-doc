@@ -2,10 +2,16 @@
   <div class="home-container">
     <div class="header">
       <h1 class="title">协同文档编辑系统</h1>
-      <a-button type="primary" @click="showCreateModal">
-        新建文档
-        <template #icon><PlusOutlined /></template>
-      </a-button>
+      <div class="header-actions">
+        <div class="user-info" v-if="userStore.user">
+          <span class="username">{{ userStore.user.username }}</span>
+          <a-button type="link" @click="handleLogout">退出登录</a-button>
+        </div>
+        <a-button type="primary" @click="showCreateModal">
+          新建文档
+          <template #icon><PlusOutlined /></template>
+        </a-button>
+      </div>
     </div>
 
     <a-spin :spinning="loading">
@@ -72,11 +78,13 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDocumentStore } from '@/stores/document'
+import { useUserStore } from '@/stores/user'
 import { PlusOutlined, FileTextOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 
 const router = useRouter()
 const documentStore = useDocumentStore()
+const userStore = useUserStore()
 const { loading, fetchDocuments, createDocument: storeCreateDocument } = documentStore
 
 const createModalVisible = ref(false)
@@ -142,6 +150,12 @@ const confirmDelete = async (id: string) => {
   }
 }
 
+const handleLogout = () => {
+  userStore.logout()
+  message.success('已退出登录')
+  router.push('/login')
+}
+
 onMounted(() => {
   fetchDocuments()
 })
@@ -199,5 +213,17 @@ onMounted(() => {
 
 .document-id {
   @apply text-xs text-gray-500 mt-2;
+}
+
+.header-actions {
+  @apply flex items-center gap-4;
+}
+
+.user-info {
+  @apply flex items-center mr-2;
+}
+
+.username {
+  @apply text-gray-700 font-medium;
 }
 </style> 
