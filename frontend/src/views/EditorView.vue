@@ -2,9 +2,9 @@
   <div class="editor-view">
     <div class="editor-nav">
       <div class="nav-left">
-        <a-button @click="goBack" type="text">
+        <a-button @click="goBack" type="text" class="back-button">
           <template #icon><ArrowLeftOutlined /></template>
-          返回列表
+          <span class="button-text">返回列表</span>
         </a-button>
       </div>
       <div class="nav-right">
@@ -82,6 +82,16 @@ onMounted(async () => {
 
 .nav-left, .nav-right {
   @apply flex items-center gap-2;
+}
+
+.back-button {
+  @apply flex items-center;
+}
+
+.button-text {
+  @apply inline-flex items-center;
+  line-height: 1;
+  vertical-align: middle;
 }
 
 .delete-icon {

@@ -55,7 +55,7 @@ const connectedUsers = ref<{ name: string; color: string }[]>([])
 const documentStore = useDocumentStore()
 const userStore = useUserStore()
 
-// 随机生成用户名和颜色
+// 随机生成颜色
 const getRandomColor = () => {
   const colors = [
     '#5D8C7B', '#F2D091', '#F2A679', '#D95D39', '#49111C',
@@ -64,7 +64,8 @@ const getRandomColor = () => {
   return colors[Math.floor(Math.random() * colors.length)]
 }
 
-const username = `用户${Math.floor(Math.random() * 1000)}`
+// 使用登录用户的用户名，如果未登录则使用随机用户名
+const username = userStore.user ? userStore.user.username : `游客${Math.floor(Math.random() * 1000)}`
 const userColor = getRandomColor()
 
 let ydoc: Y.Doc
@@ -196,6 +197,12 @@ watch(() => props.documentId, () => {
         }
       }
     )
+    
+    // 重新设置用户信息
+    provider.awareness.setLocalStateField('user', {
+      name: username,
+      color: userColor
+    })
   }
 })
 </script>
