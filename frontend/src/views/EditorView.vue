@@ -8,7 +8,18 @@
         </a-button>
       </div>
       <div class="nav-right" v-if="hasAccess">
+        <a-button 
+          v-if="isOwner"
+          @click="showCollaborationDrawer = true" 
+          type="primary"
+          class="collaborate-button"
+        >
+          <template #icon><TeamOutlined /></template>
+          <span class="button-text">协作管理</span>
+        </a-button>
+        
         <a-popconfirm
+          v-if="isOwner || currentDocument?.permission === 'edit'"
           title="确定要删除这个文档吗？"
           description="删除后将无法恢复"
           @confirm="confirmDelete"
@@ -37,8 +48,19 @@
       <collaborative-editor 
         v-else-if="!loading && documentId && hasAccess" 
         :document-id="documentId"
+        :read-only="!isOwner && currentDocument?.permission !== 'edit'"
       />
     </a-spin>
+    
+    <a-drawer
+      v-if="isOwner"
+      v-model:open="showCollaborationDrawer"
+      title="文档协作管理"
+      placement="right"
+      :width="400"
+    >
+      <collaboration-manager :document-id="documentId" />
+    </a-drawer>
   </div>
 </template>
 
@@ -46,17 +68,30 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDocumentStore } from '@/stores/document'
-import { ArrowLeftOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { useUserStore } from '@/stores/user'
+import { ArrowLeftOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons-vue'
 import CollaborativeEditor from '@/components/CollaborativeEditor.vue'
-import { message, Result, Button, Spin } from 'ant-design-vue'
+import CollaborationManager from '@/components/CollaborationManager.vue'
+import { message } from 'ant-design-vue'
 
 const route = useRoute()
 const router = useRouter()
 const documentStore = useDocumentStore()
-const { fetchDocument, loading, error } = documentStore
+const userStore = useUserStore()
+
+const { fetchDocument, loading } = documentStore
+const currentDocument = computed(() => documentStore.currentDocument)
+const currentUserId = computed(() => userStore.user?.id || '')
 
 const documentId = computed(() => route.params.id as string)
 const hasAccess = ref(false)
+const showCollaborationDrawer = ref(false)
+
+// 检查当前用户是否是文档所有者
+const isOwner = computed(() => {
+  if (!currentDocument.value || !currentUserId.value) return false
+  return currentDocument.value.owner === currentUserId.value
+})
 
 const goBack = () => {
   router.push('/')
@@ -88,6 +123,13 @@ onMounted(async () => {
     if (!success) {
       console.log('没有权限访问此文档或文档不存在')
       message.error('没有权限访问此文档或文档不存在')
+    } else {
+      // 调试信息
+      console.log('文档信息:', currentDocument.value)
+      console.log('当前用户ID:', currentUserId.value)
+      console.log('是否为文档所有者:', isOwner.value)
+      console.log('用户权限:', currentDocument.value?.permission)
+      console.log('编辑器只读状态:', !isOwner.value && currentDocument.value?.permission !== 'edit')
     }
   }
 })
@@ -114,6 +156,10 @@ onMounted(async () => {
   @apply inline-flex items-center;
   line-height: 1;
   vertical-align: middle;
+}
+
+.collaborate-button {
+  @apply flex items-center;
 }
 
 .delete-icon {

@@ -10,6 +10,7 @@ import { authRouter } from './routes/auth';
 import { authMiddleware } from './middleware/auth';
 import jwt from 'jsonwebtoken';
 import url from 'url';
+import collaborationRouter from './routes/collaboration';
 
 // JWT密钥
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -26,6 +27,7 @@ app.use(express.json());
 // 路由
 app.use('/api/auth', authRouter);
 app.use('/api/documents', documentRouter); // 注意：路由内部已经添加了authMiddleware
+app.use('/api/collaboration', collaborationRouter); // 添加协作相关路由
 
 // 健康检查
 app.get('/api/health', (req: express.Request, res: express.Response) => {
@@ -47,24 +49,35 @@ wss.on('connection', (conn: AuthenticatedWebSocket, req) => {
   // 获取token
   const urlParams = url.parse(req.url || '', true).query;
   const token = urlParams.token as string;
+  const accessToken = urlParams.accessToken as string;
   
-  // WebSocket连接必须验证
-  if (!token) {
+  // 尝试通过访问令牌或JWT验证用户
+  if (accessToken) {
+    // 处理通过共享链接访问（无需用户登录）
+    // 从document参数中提取文档ID
+    const docName = urlParams.document as string;
+    const documentId = docName.replace('document-', '');
+    
+    // 验证访问令牌将在docAccess回调中完成
+    console.log(`尝试通过访问令牌访问文档: ${documentId}`);
+  } 
+  else if (!token) {
     console.log('WebSocket连接没有提供token，拒绝连接');
     conn.close(1000, '未经授权');
     return;
-  }
-  
-  try {
-    // 验证token
-    const decoded = jwt.verify(token, JWT_SECRET);
-    // 添加用户信息到连接对象
-    conn.user = decoded;
-  } catch (error) {
-    // token无效，拒绝连接
-    console.log('WebSocket连接使用了无效的token，拒绝连接');
-    conn.close(1000, '无效的token');
-    return;
+  } 
+  else {
+    try {
+      // 验证JWT token
+      const decoded = jwt.verify(token, JWT_SECRET);
+      // 添加用户信息到连接对象
+      conn.user = decoded;
+    } catch (error) {
+      // token无效，拒绝连接
+      console.log('WebSocket连接使用了无效的token，拒绝连接');
+      conn.close(1000, '无效的token');
+      return;
+    }
   }
   
   // 设置Y.js WebSocket连接
@@ -74,52 +87,81 @@ wss.on('connection', (conn: AuthenticatedWebSocket, req) => {
     // 添加权限检查回调
     docAccess: async (docName: string) => {
       try {
-        // 如果用户已验证
-        if (conn.user) {
-          // 从文档名称中提取文档ID
-          // 文档名称格式通常是 document-{documentId}
-          const documentId = docName.replace('document-', '');
+        // 从文档名称中提取文档ID
+        // 文档名称格式通常是 document-{documentId}
+        const documentId = docName.replace('document-', '');
+        
+        // 获取查询参数
+        const urlParams = url.parse(req.url || '', true).query;
+        const accessToken = urlParams.accessToken as string;
+        
+        if (!DISABLE_DB) {
+          // 查询数据库验证文档访问权限
+          const Document = mongoose.model('Document');
+          const doc = await Document.findById(documentId);
           
-          if (!DISABLE_DB) {
-            // 查询数据库验证文档所有权
-            const Document = mongoose.model('Document');
-            const doc = await Document.findById(documentId);
-            
-            if (!doc) {
-              console.log(`文档不存在: ${documentId}`);
+          if (!doc) {
+            console.log(`文档不存在: ${documentId}`);
+            return false;
+          }
+          
+          // 检查访问令牌
+          if (accessToken && doc.accessLink?.token === accessToken) {
+            // 验证访问链接是否过期
+            if (doc.accessLink.expiresAt && new Date() > new Date(doc.accessLink.expiresAt)) {
+              console.log(`访问令牌已过期: ${documentId}`);
               return false;
             }
-            
+            console.log(`通过访问令牌访问文档: ${documentId}`);
+            return true;
+          }
+          
+          // 如果用户已通过JWT验证
+          if (conn.user) {
             // 验证文档所有者是否为当前用户
             if (doc.owner && doc.owner.toString() === conn.user.id) {
-              console.log(`用户 ${conn.user.username} 有权限访问文档 ${documentId}`);
+              console.log(`用户 ${conn.user.username} 是文档所有者，允许访问 ${documentId}`);
               return true;
-            } else {
-              console.log(`用户 ${conn.user.username} 没有权限访问文档 ${documentId}`);
-              return false;
             }
+            
+            // 验证用户是否是协作者
+            const collaborator = doc.collaborators?.find(
+              (c) => c.user.toString() === conn.user.id && 
+                    ['edit', 'comment'].includes(c.permission)
+            );
+            
+            if (collaborator) {
+              console.log(`用户 ${conn.user.username} 是文档协作者，权限: ${collaborator.permission}`);
+              return true;
+            }
+            
+            console.log(`用户 ${conn.user.username} 没有权限访问文档 ${documentId}`);
           } else {
-            // 内存模式下的验证
-            const inMemoryDocuments = require('./routes/document').inMemoryDocuments;
-            const doc = inMemoryDocuments.find(d => d.id === documentId);
-            
-            if (!doc) {
-              console.log(`文档不存在: ${documentId}`);
-              return false;
-            }
-            
-            if (doc.ownerId === conn.user.id) {
-              console.log(`用户 ${conn.user.username} 有权限访问文档 ${documentId}`);
-              return true;
-            } else {
-              console.log(`用户 ${conn.user.username} 没有权限访问文档 ${documentId}`);
-              return false;
-            }
+            console.log('未登录用户尝试访问文档，且没有有效的访问令牌');
+          }
+        } else {
+          // 内存模式下的验证 - 这里需要更新以支持协作者
+          const inMemoryDocuments = require('./routes/document').inMemoryDocuments;
+          const doc = inMemoryDocuments.find((d: any) => d.id === documentId);
+          
+          if (!doc) {
+            console.log(`文档不存在: ${documentId}`);
+            return false;
+          }
+          
+          // 简化版的访问令牌验证
+          if (accessToken && doc.accessToken === accessToken) {
+            console.log(`通过访问令牌访问文档: ${documentId}`);
+            return true;
+          }
+          
+          if (conn.user && doc.ownerId === conn.user.id) {
+            console.log(`用户 ${conn.user.username} 有权限访问文档 ${documentId}`);
+            return true;
           }
         }
         
-        console.log('未登录用户尝试访问文档');
-        return false; // 未登录用户拒绝访问
+        return false; // 默认拒绝访问
       } catch (error) {
         console.error('文档访问权限验证错误:', error);
         return false; // 出错时拒绝访问

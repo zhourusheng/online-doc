@@ -15,48 +15,90 @@
     </div>
 
     <a-spin :spinning="loading">
-      <div v-if="documentStore.documents.length > 0" class="document-list">
-        <div
-          v-for="doc in documentStore.documents"
-          :key="doc.id"
-          class="document-card-wrapper"
-        >
-          <a-card
-            class="document-card"
-            hoverable
-            @click="openDocument(doc.id)"
-          >
-            <template #cover>
-              <div class="document-cover">
-                <FileTextOutlined class="document-icon" />
-              </div>
-            </template>
-            <a-card-meta :title="doc.title">
-              <template #description>
-                <p>创建时间: {{ formatDate(doc.createdAt) }}</p>
-                <p>更新时间: {{ formatDate(doc.updatedAt) }}</p>
-              </template>
-            </a-card-meta>
-          </a-card>
-          <div class="document-delete-btn">
-            <a-popconfirm
-              title="确定要删除这个文档吗？"
-              description="删除后将无法恢复"
-              @confirm="confirmDelete(doc.id)"
-              ok-text="确定"
-              cancel-text="取消"
+      <!-- 文档分类标签页 -->
+      <a-tabs v-model:activeKey="activeTabKey">
+        <a-tab-pane key="owned" tab="我创建的文档">
+          <div v-if="ownedDocuments.length > 0" class="document-list">
+            <div
+              v-for="doc in ownedDocuments"
+              :key="doc.id"
+              class="document-card-wrapper"
             >
-              <DeleteOutlined class="delete-icon" />
-            </a-popconfirm>
+              <a-card
+                class="document-card"
+                hoverable
+                @click="openDocument(doc.id)"
+              >
+                <template #cover>
+                  <div class="document-cover">
+                    <FileTextOutlined class="document-icon" />
+                  </div>
+                </template>
+                <a-card-meta :title="doc.title">
+                  <template #description>
+                    <p>创建时间: {{ formatDate(doc.createdAt) }}</p>
+                    <p>更新时间: {{ formatDate(doc.updatedAt) }}</p>
+                  </template>
+                </a-card-meta>
+              </a-card>
+              <div class="document-delete-btn">
+                <a-popconfirm
+                  title="确定要删除这个文档吗？"
+                  description="删除后将无法恢复"
+                  @confirm="confirmDelete(doc.id)"
+                  ok-text="确定"
+                  cancel-text="取消"
+                >
+                  <DeleteOutlined class="delete-icon" />
+                </a-popconfirm>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-
-      <a-empty v-else description="暂无文档，点击右上角创建新文档">
-        <template #image>
-          <FileTextOutlined style="font-size: 48px; color: #ccc;" />
-        </template>
-      </a-empty>
+          <a-empty v-else description="暂无文档，点击右上角创建新文档">
+            <template #image>
+              <FileTextOutlined style="font-size: 48px; color: #ccc;" />
+            </template>
+          </a-empty>
+        </a-tab-pane>
+        
+        <a-tab-pane key="collaborated" tab="协作的文档">
+          <div v-if="collaboratedDocuments.length > 0" class="document-list">
+            <div
+              v-for="doc in collaboratedDocuments"
+              :key="doc.id"
+              class="document-card-wrapper"
+            >
+              <a-card
+                class="document-card"
+                hoverable
+                @click="openDocument(doc.id)"
+              >
+                <template #cover>
+                  <div class="document-cover">
+                    <TeamOutlined class="document-icon" />
+                  </div>
+                </template>
+                <a-card-meta :title="doc.title">
+                  <template #description>
+                    <p>所有者: {{ doc.ownerName || '未知' }}</p>
+                    <p>更新时间: {{ formatDate(doc.updatedAt) }}</p>
+                    <p>
+                      <a-tag :color="getPermissionColor(doc.permission)">
+                        {{ getPermissionText(doc.permission) }}
+                      </a-tag>
+                    </p>
+                  </template>
+                </a-card-meta>
+              </a-card>
+            </div>
+          </div>
+          <a-empty v-else description="暂无协作文档">
+            <template #image>
+              <TeamOutlined style="font-size: 48px; color: #ccc;" />
+            </template>
+          </a-empty>
+        </a-tab-pane>
+      </a-tabs>
     </a-spin>
 
     <a-modal
@@ -75,11 +117,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDocumentStore } from '@/stores/document'
 import { useUserStore } from '@/stores/user'
-import { PlusOutlined, FileTextOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, FileTextOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 
 const router = useRouter()
@@ -87,11 +129,41 @@ const documentStore = useDocumentStore()
 const userStore = useUserStore()
 const { loading, fetchDocuments, createDocument: storeCreateDocument } = documentStore
 
+const activeTabKey = ref('owned')
 const createModalVisible = ref(false)
 const creating = ref(false)
 const formData = ref({
   title: ''
 })
+
+// 分类文档
+const ownedDocuments = computed(() => {
+  return documentStore.documents.filter(doc => doc.owner === userStore.user?.id)
+})
+
+const collaboratedDocuments = computed(() => {
+  return documentStore.documents.filter(doc => doc.owner !== userStore.user?.id)
+})
+
+// 获取权限文本
+const getPermissionText = (permission?: 'read' | 'comment' | 'edit') => {
+  switch (permission) {
+    case 'read': return '只读权限'
+    case 'comment': return '评论权限'
+    case 'edit': return '编辑权限'
+    default: return '未知权限'
+  }
+}
+
+// 获取权限颜色
+const getPermissionColor = (permission?: 'read' | 'comment' | 'edit') => {
+  switch (permission) {
+    case 'read': return 'blue'
+    case 'comment': return 'green'
+    case 'edit': return 'purple'
+    default: return 'default'
+  }
+}
 
 const formatDate = (date: Date) => {
   if (!date) return '-'
@@ -175,7 +247,7 @@ onMounted(() => {
 }
 
 .document-list {
-  @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
+  @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4;
 }
 
 .document-card-wrapper {

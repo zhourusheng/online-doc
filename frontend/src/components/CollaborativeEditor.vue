@@ -6,6 +6,7 @@
         class="title-input"
         placeholder="文档标题"
         @change="updateTitle"
+        :disabled="readOnly || !canEditTitle"
       />
       <div class="editor-users">
         <a-tooltip v-for="(user, index) in connectedUsers" :key="index" :title="user.name + (user.isSelf ? ' (你)' : '')">
@@ -35,7 +36,11 @@
       />
     </div>
 
-    <div ref="editorEl" class="editor-content"></div>
+    <div ref="editorEl" class="editor-content" :class="{ 'read-only': readOnly }"></div>
+    
+    <div v-if="readOnly" class="read-only-indicator">
+      <a-tag color="blue">只读模式</a-tag>
+    </div>
   </div>
 </template>
 
@@ -57,7 +62,9 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 
 const props = defineProps<{
-  documentId: string
+  documentId: string;
+  readOnly?: boolean;
+  accessToken?: string;
 }>()
 
 const router = useRouter()
@@ -70,6 +77,9 @@ const userStore = useUserStore()
 const connectionError = ref<string | null>(null)
 // 生成唯一的客户端ID，用于区分同一用户的不同会话
 const clientId = ref(`${Date.now()}-${Math.floor(Math.random() * 1000)}`)
+
+// 检查是否有权限编辑标题（仅在通过正常登录且不是只读模式时）
+const canEditTitle = ref(!!userStore.token && !props.readOnly)
 
 // 随机生成颜色
 const getRandomColor = () => {
@@ -88,8 +98,8 @@ let ydoc: Y.Doc
 let provider: WebsocketProvider
 
 const updateTitle = async () => {
-  // 保存标题到服务器
-  if (props.documentId && title.value) {
+  // 保存标题到服务器，仅当用户有权限时
+  if (props.documentId && title.value && canEditTitle.value) {
     try {
       const success = await documentStore.updateDocumentTitle(props.documentId, title.value)
       if (!success) {
@@ -105,8 +115,9 @@ const updateTitle = async () => {
 }
 
 const setupWebSocketConnection = () => {
-  if (!userStore.token) {
-    connectionError.value = '您需要登录才能访问此文档'
+  // 检查是否有访问令牌或用户令牌
+  if (!userStore.token && !props.accessToken) {
+    connectionError.value = '无法建立连接，缺少认证信息'
     return false
   }
 
@@ -114,18 +125,24 @@ const setupWebSocketConnection = () => {
     // 创建 Y.js 文档
     ydoc = new Y.Doc()
     
+    // WebSocket连接参数，使用访问令牌或用户令牌
+    const params: Record<string, string> = {
+      clientId: clientId.value // 添加客户端ID
+    }
+    
+    // 优先使用访问令牌，如果没有则使用用户令牌
+    if (props.accessToken) {
+      params.accessToken = props.accessToken
+    } else if (userStore.token) {
+      params.token = userStore.token
+    }
+    
     // 连接到 WebSocket 服务器
     provider = new WebsocketProvider(
       'ws://localhost:3001', 
       `document-${props.documentId}`, 
       ydoc,
-      {
-        // 将用户认证信息添加到WebSocket连接
-        params: {
-          token: userStore.token,
-          clientId: clientId.value // 添加客户端ID
-        }
-      }
+      { params }
     )
 
     // 监听连接状态
@@ -146,9 +163,13 @@ const setupWebSocketConnection = () => {
         connectionError.value = '您没有权限访问此文档'
         message.error('您没有权限访问此文档')
         
-        // 3秒后返回文档列表
+        // 3秒后返回文档列表或登录页
         setTimeout(() => {
-          router.push('/')
+          if (userStore.isLoggedIn()) {
+            router.push('/')
+          } else {
+            router.push('/login')
+          }
         }, 3000)
         
         return false
@@ -260,18 +281,11 @@ onMounted(() => {
           color: userColor,
           isSelf: true,
           clientId: clientId.value
-        },
-        // Firefox特定配置
-        render: (user) => {
-          // 如果是Firefox并且是自己的光标，则不渲染
-          if (isFirefox() && user.clientId === clientId.value) {
-            return {}
-          }
-          return {}; // 使用默认渲染
         }
       })
     ],
     autofocus: true,
+    editable: !props.readOnly,
   })
   
   // 在Firefox中，需要特别处理光标
@@ -287,6 +301,13 @@ onMounted(() => {
       });
     });
   }
+
+  // 监听只读属性变化
+  watch(() => props.readOnly, (isReadOnly) => {
+    if (editor.value) {
+      editor.value.setEditable(!isReadOnly)
+    }
+  })
 })
 
 onUnmounted(() => {
@@ -353,5 +374,9 @@ watch(() => props.documentId, () => {
 
 .connection-error {
   @apply mb-4;
+}
+
+.read-only-indicator {
+  @apply mt-4 text-center;
 }
 </style> 

@@ -7,6 +7,9 @@ interface Document {
   id: string
   title: string
   content?: string
+  owner: string
+  ownerName?: string
+  permission?: 'read' | 'comment' | 'edit'
   createdAt: Date
   updatedAt: Date
 }
@@ -16,6 +19,10 @@ interface ApiDocument {
   _id: string
   title: string
   content?: string
+  owner?: string | { _id: string, username?: string }  // MongoDB模式下的owner
+  ownerId?: string                  // 内存模式下的ownerId
+  ownerName?: string               // 所有者名称
+  permission?: 'read' | 'comment' | 'edit'  // 协作者权限
   createdAt: string
   updatedAt: string
 }
@@ -55,10 +62,21 @@ export const useDocumentStore = defineStore('document', () => {
       const transformedDocs = data
         .filter((doc: any): doc is ApiDocument => doc && doc._id)
         .map((doc: ApiDocument) => {
+          // 处理owner字段，可能是字符串ID、对象或ownerId
+          let ownerId = '';
+          if (doc.owner) {
+            ownerId = typeof doc.owner === 'string' ? doc.owner : doc.owner._id;
+          } else if (doc.ownerId) {
+            ownerId = doc.ownerId;
+          }
+          
           const transformed: Document = {
             id: doc._id,
             title: doc.title || '无标题',
             content: doc.content,
+            owner: ownerId,
+            ownerName: doc.ownerName || (typeof doc.owner !== 'string' && doc.owner?.username) || '',
+            permission: doc.permission,
             createdAt: new Date(doc.createdAt || Date.now()),
             updatedAt: new Date(doc.updatedAt || Date.now())
           }
@@ -99,10 +117,21 @@ export const useDocumentStore = defineStore('document', () => {
         throw new Error('文档数据不完整');
       }
       
+      // 处理owner字段，可能是字符串ID、对象或ownerId
+      let ownerId = '';
+      if (doc.owner) {
+        ownerId = typeof doc.owner === 'string' ? doc.owner : doc.owner._id;
+      } else if (doc.ownerId) {
+        ownerId = doc.ownerId;
+      }
+      
       currentDocument.value = {
         id: doc._id,
         title: doc.title || '无标题',
         content: doc.content,
+        owner: ownerId,
+        ownerName: doc.ownerName || (typeof doc.owner !== 'string' && doc.owner?.username) || '',
+        permission: doc.permission,
         createdAt: new Date(doc.createdAt || Date.now()),
         updatedAt: new Date(doc.updatedAt || Date.now())
       }
@@ -147,6 +176,9 @@ export const useDocumentStore = defineStore('document', () => {
         id: doc._id,
         title: doc.title || '无标题',
         content: doc.content,
+        owner: doc.owner || userStore.user?.id || '',
+        ownerName: doc.ownerName || (typeof doc.owner !== 'string' && doc.owner?.username) || '',
+        permission: doc.permission,
         createdAt: new Date(doc.createdAt || Date.now()),
         updatedAt: new Date(doc.updatedAt || Date.now())
       }

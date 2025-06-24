@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import User, { IUser } from '../models/User';
 import jwt from 'jsonwebtoken';
+import { authMiddleware } from '../middleware/auth';
 
 const router: Router = Router();
 
@@ -153,6 +154,28 @@ router.post('/login', async (req: Request, res: Response) => {
     });
   } catch (error) {
     res.status(500).json({ message: '登录失败', error });
+  }
+});
+
+// 搜索用户
+router.get('/search', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { username } = req.query;
+    
+    if (!username || typeof username !== 'string') {
+      return res.status(400).json({ message: '请提供有效的用户名搜索词' });
+    }
+    
+    // 使用正则表达式进行用户名模糊搜索
+    const users = await User.find({ 
+      username: { $regex: username, $options: 'i' },
+      _id: { $ne: req.user.id } // 排除当前登录用户
+    }).select('_id username').limit(10); // 限制结果数量并只返回必要字段
+    
+    res.status(200).json({ users });
+  } catch (error) {
+    console.error('搜索用户失败:', error);
+    res.status(500).json({ message: '搜索用户失败', error });
   }
 });
 
