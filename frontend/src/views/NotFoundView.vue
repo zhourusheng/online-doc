@@ -24,6 +24,6 @@ const goHome = () => {
 
 <style lang="less" scoped>
 .not-found {
-  @apply flex items-center justify-center min-h-[80vh];
+  @apply flex items-center justify-center min-h-screen;
 }
 </style> 
