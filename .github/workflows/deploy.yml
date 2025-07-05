@@ -49,6 +49,13 @@ jobs:
           ls -la frontend/dist/
           ls -la backend/dist/
           
+      # 添加 Lighthouse CI 检测
+      - name: Run Lighthouse CI
+        run: |
+          npm install -g @lhci/cli
+          pnpm run preview & # 启动预览服务器，根据你的项目调整
+          lhci autorun --config=./lighthouserc.js
+          
       - name: Create deployment package
         run: |
           tar -czf deploy.tar.gz frontend/dist backend/dist package.json pnpm-lock.yaml pnpm-workspace.yaml
