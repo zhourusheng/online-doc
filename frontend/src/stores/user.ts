@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import request from '../utils/request'
 
 interface User {
   id: string
@@ -36,20 +37,11 @@ export const useUserStore = defineStore('user', () => {
     error.value = null
     
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ username, password })
+      const response = await request.post('/api/auth/register', {
+        username, password
       })
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        error.value = data.message || '注册失败'
-        return false
-      }
+      const data = response.data
       
       // 保存用户信息和token
       user.value = data.user
@@ -60,8 +52,8 @@ export const useUserStore = defineStore('user', () => {
       localStorage.setItem('token', data.token)
       
       return true
-    } catch (err) {
-      error.value = '注册过程中发生错误'
+    } catch (err: any) {
+      error.value = err.response?.data?.message || '注册过程中发生错误'
       return false
     } finally {
       loading.value = false
@@ -74,20 +66,11 @@ export const useUserStore = defineStore('user', () => {
     error.value = null
     
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ username, password })
+      const response = await request.post('/api/auth/login', {
+        username, password
       })
       
-      const data = await response.json()
-      
-      if (!response.ok) {
-        error.value = data.message || '登录失败'
-        return false
-      }
+      const data = response.data
       
       // 保存用户信息和token
       user.value = data.user
@@ -98,8 +81,8 @@ export const useUserStore = defineStore('user', () => {
       localStorage.setItem('token', data.token)
       
       return true
-    } catch (err) {
-      error.value = '登录过程中发生错误'
+    } catch (err: any) {
+      error.value = err.response?.data?.message || '登录过程中发生错误'
       return false
     } finally {
       loading.value = false

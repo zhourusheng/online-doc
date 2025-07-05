@@ -156,8 +156,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import axios from 'axios';
-import { useUserStore } from '@/stores/user';
+import request from '../utils/request';
+import { useUserStore } from '../stores/user';
 
 const props = defineProps<{
   documentId: string;
@@ -188,13 +188,9 @@ const accessLinkUrl = computed(() => {
   return `${baseUrl}/shared/${props.documentId}?accessToken=${accessLink.value.token}`;
 });
 
-// 获取认证头
+// 获取认证头 - 不再需要，因为request工具会自动添加
 const getAuthHeaders = () => {
-  return {
-    headers: {
-      ...userStore.getAuthHeader()
-    }
-  };
+  return {};
 };
 
 // 生命周期钩子
@@ -213,7 +209,7 @@ onMounted(async () => {
 // 方法
 async function loadCollaborators() {
   try {
-    const response = await axios.get(`/api/collaboration/${props.documentId}/collaborators`, getAuthHeaders());
+    const response = await request.get(`/api/collaboration/${props.documentId}/collaborators`);
     collaborators.value = response.data.collaborators || [];
   } catch (error) {
     console.error('获取协作者失败', error);
@@ -228,7 +224,7 @@ async function searchUser() {
   }
   
   try {
-    const response = await axios.get(`/api/auth/search?username=${collaboratorUsername.value}`, getAuthHeaders());
+    const response = await request.get(`/api/auth/search?username=${collaboratorUsername.value}`);
     searchResults.value = response.data.users || [];
     
     if (searchResults.value.length === 0) {
@@ -242,10 +238,10 @@ async function searchUser() {
 
 async function addCollaborator(userId: string) {
   try {
-    await axios.post(`/api/collaboration/${props.documentId}/collaborators`, {
+    await request.post(`/api/collaboration/${props.documentId}/collaborators`, {
       userId,
       permission: selectedPermission.value
-    }, getAuthHeaders());
+    });
     
     // 重新加载协作者列表
     await loadCollaborators();
@@ -263,7 +259,7 @@ async function addCollaborator(userId: string) {
 
 async function removeCollaborator(userId: string) {
   try {
-    await axios.delete(`/api/collaboration/${props.documentId}/collaborators/${userId}`, getAuthHeaders());
+    await request.delete(`/api/collaboration/${props.documentId}/collaborators/${userId}`);
     
     // 重新加载协作者列表
     await loadCollaborators();
@@ -277,10 +273,10 @@ async function removeCollaborator(userId: string) {
 
 async function updateCollaboratorPermission(userId: string, permission: string) {
   try {
-    await axios.post(`/api/collaboration/${props.documentId}/collaborators`, {
+    await request.post(`/api/collaboration/${props.documentId}/collaborators`, {
       userId,
       permission
-    }, getAuthHeaders());
+    });
     
     showStatusMessage('权限已更新', 'success');
   } catch (error) {
@@ -294,7 +290,7 @@ async function updateCollaboratorPermission(userId: string, permission: string) 
 
 async function checkAccessLink() {
   try {
-    const response = await axios.get(`/api/collaboration/${props.documentId}/access-link`, getAuthHeaders());
+    const response = await request.get(`/api/collaboration/${props.documentId}/access-link`);
     accessLink.value = response.data.accessLink || null;
   } catch (error) {
     console.error('获取访问链接信息失败', error);
@@ -304,10 +300,10 @@ async function checkAccessLink() {
 
 async function createAccessLink() {
   try {
-    const response = await axios.post(`/api/collaboration/${props.documentId}/access-link`, {
+    const response = await request.post(`/api/collaboration/${props.documentId}/access-link`, {
       permission: newLinkPermission.value,
       expiresInHours: newLinkExpiration.value === '0' ? undefined : parseInt(newLinkExpiration.value)
-    }, getAuthHeaders());
+    });
     
     accessLink.value = response.data.accessLink;
     showStatusMessage('访问链接已创建', 'success');
@@ -319,7 +315,7 @@ async function createAccessLink() {
 
 async function deleteAccessLink() {
   try {
-    await axios.delete(`/api/collaboration/${props.documentId}/access-link`, getAuthHeaders());
+    await request.delete(`/api/collaboration/${props.documentId}/access-link`);
     
     accessLink.value = null;
     showStatusMessage('访问链接已删除', 'success');

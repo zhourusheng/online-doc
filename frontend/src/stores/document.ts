@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useUserStore } from './user'
 import { message } from 'ant-design-vue'
+import request from '../utils/request'
 
 interface Document {
   id: string
@@ -38,18 +39,9 @@ export const useDocumentStore = defineStore('document', () => {
     loading.value = true
     error.value = null
     try {
-      const response = await fetch('/api/documents', {
-        headers: {
-          ...userStore.getAuthHeader()
-        }
-      })
+      const response = await request.get('/api/documents')
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || '获取文档列表失败');
-      }
-      
-      const data = await response.json()
+      const data = response.data
       
       if (!Array.isArray(data)) {
         return
@@ -87,8 +79,8 @@ export const useDocumentStore = defineStore('document', () => {
       transformedDocs.forEach(doc => {
         documents.value.push(doc)
       })
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '获取文档列表失败';
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || '获取文档列表失败';
       error.value = errorMessage;
       message.error(errorMessage);
     } finally {
@@ -100,18 +92,9 @@ export const useDocumentStore = defineStore('document', () => {
     loading.value = true
     error.value = null
     try {
-      const response = await fetch(`/api/documents/${id}`, {
-        headers: {
-          ...userStore.getAuthHeader()
-        }
-      })
+      const response = await request.get(`/api/documents/${id}`)
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || '获取文档失败');
-      }
-      
-      const doc = await response.json() as ApiDocument
+      const doc = response.data as ApiDocument
       
       if (!doc || !doc._id) {
         throw new Error('文档数据不完整');
@@ -137,8 +120,8 @@ export const useDocumentStore = defineStore('document', () => {
       }
       
       return true; // 成功获取文档
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '获取文档失败';
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || '获取文档失败';
       error.value = errorMessage;
       message.error(errorMessage);
       currentDocument.value = null;
@@ -152,21 +135,9 @@ export const useDocumentStore = defineStore('document', () => {
     loading.value = true
     error.value = null
     try {
-      const response = await fetch('/api/documents', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...userStore.getAuthHeader()
-        },
-        body: JSON.stringify({ title })
-      })
+      const response = await request.post('/api/documents', { title })
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || '创建文档失败');
-      }
-      
-      const doc = await response.json() as ApiDocument
+      const doc = response.data as ApiDocument
       
       if (!doc || !doc._id) {
         throw new Error('创建文档失败，返回数据不完整');
@@ -176,7 +147,7 @@ export const useDocumentStore = defineStore('document', () => {
         id: doc._id,
         title: doc.title || '无标题',
         content: doc.content,
-        owner: doc.owner || userStore.user?.id || '',
+        owner: typeof doc.owner === 'string' ? doc.owner : (doc.owner?._id || userStore.user?.id || ''),
         ownerName: doc.ownerName || (typeof doc.owner !== 'string' && doc.owner?.username) || '',
         permission: doc.permission,
         createdAt: new Date(doc.createdAt || Date.now()),
@@ -185,8 +156,8 @@ export const useDocumentStore = defineStore('document', () => {
       
       documents.value.push(newDoc)
       return newDoc
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '创建文档失败';
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || '创建文档失败';
       error.value = errorMessage;
       message.error(errorMessage);
       return null
@@ -199,17 +170,7 @@ export const useDocumentStore = defineStore('document', () => {
     loading.value = true
     error.value = null
     try {
-      const response = await fetch(`/api/documents/${id}`, {
-        method: 'DELETE',
-        headers: {
-          ...userStore.getAuthHeader()
-        }
-      })
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || '删除文档失败');
-      }
+      await request.delete(`/api/documents/${id}`)
       
       // 从本地列表中删除文档
       const index = documents.value.findIndex(doc => doc.id === id)
@@ -218,8 +179,8 @@ export const useDocumentStore = defineStore('document', () => {
       }
       
       return true
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '删除文档失败';
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || '删除文档失败';
       error.value = errorMessage;
       message.error(errorMessage);
       return false
@@ -232,37 +193,25 @@ export const useDocumentStore = defineStore('document', () => {
   const updateDocumentTitle = async (id: string, title: string) => {
     error.value = null
     try {
-      const response = await fetch(`/api/documents/${id}`, { 
-        method: 'PUT', 
-        headers: { 
-          'Content-Type': 'application/json',
-          ...userStore.getAuthHeader()
-        }, 
-        body: JSON.stringify({ title }) 
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || '更新标题失败');
-      }
+      await request.put(`/api/documents/${id}`, { title })
       
       // 更新本地存储的文档标题
       if (currentDocument.value && currentDocument.value.id === id) {
-        currentDocument.value.title = title;
+        currentDocument.value.title = title
       }
       
       // 更新文档列表中的标题
-      const docIndex = documents.value.findIndex(doc => doc.id === id);
-      if (docIndex !== -1) {
-        documents.value[docIndex].title = title;
+      const doc = documents.value.find(d => d.id === id)
+      if (doc) {
+        doc.title = title
       }
       
-      return true;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '更新标题失败';
+      return true
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || '更新标题失败';
       error.value = errorMessage;
       message.error(errorMessage);
-      return false;
+      return false
     }
   }
 

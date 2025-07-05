@@ -58,7 +58,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import axios from 'axios'
+import request from '../utils/request'
 import CollaborativeEditor from '@/components/CollaborativeEditor.vue'
 import { Spin, Result, Button, Alert } from 'ant-design-vue'
 import { marked } from 'marked'
@@ -125,7 +125,7 @@ const loadSharedDocument = async () => {
   error.value = false
   
   try {
-    const response = await axios.get(`/api/collaboration/${documentId.value}/shared`, {
+    const response = await request.get(`/api/collaboration/${documentId.value}/shared`, {
       params: { accessToken: accessToken.value }
     })
     
