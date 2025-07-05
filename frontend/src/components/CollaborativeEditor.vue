@@ -139,7 +139,7 @@ const setupWebSocketConnection = () => {
     
     // 连接到 WebSocket 服务器
     provider = new WebsocketProvider(
-      'ws://localhost:3001', 
+      import.meta.env.VITE_WS_URL || 'ws://localhost:3001', 
       `document-${props.documentId}`, 
       ydoc,
       { params }
