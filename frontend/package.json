@@ -24,6 +24,7 @@
     "pinia": "^2.1.7",
     "vue": "^3.4.21",
     "vue-router": "^4.3.0",
+    "web-vitals": "^5.0.3",
     "y-prosemirror": "^1.2.2",
     "y-websocket": "^1.5.4",
     "yjs": "^13.6.14"
