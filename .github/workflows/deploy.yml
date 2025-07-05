@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -53,26 +53,43 @@ jobs:
         run: |
           tar -czf deploy.tar.gz frontend/dist backend/dist package.json pnpm-lock.yaml pnpm-workspace.yaml
           
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-package
+          path: deploy.tar.gz
+          retention-days: 1
+  
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy-package
+          
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.SERVER_HOST }}
+          if_key_exists: replace
+          
+      - name: Add known hosts
+        run: ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
           
       - name: Deploy to Server
         run: |
-          # 显示SSH密钥信息（不显示实际内容）
-          echo "SSH key file exists: $(test -f ~/.ssh/id_ed25519 && echo 'Yes' || echo 'No')"
-          echo "SSH key file permissions: $(ls -la ~/.ssh/id_ed25519)"
+          echo "Deploying to ${{ secrets.SERVER_HOST }}..."
           
           # 上传部署包
-          scp deploy.tar.gz ${{ secrets.SERVER_USERNAME }}@${{ secrets.SERVER_HOST }}:/tmp/
+          scp -v deploy.tar.gz ${{ secrets.SERVER_USERNAME }}@${{ secrets.SERVER_HOST }}:/tmp/
           
           # 解压并部署
-          ssh ${{ secrets.SERVER_USERNAME }}@${{ secrets.SERVER_HOST }} "mkdir -p ${{ secrets.SERVER_DEPLOY_PATH }} && \
+          ssh -v ${{ secrets.SERVER_USERNAME }}@${{ secrets.SERVER_HOST }} "mkdir -p ${{ secrets.SERVER_DEPLOY_PATH }} && \
             tar -xzf /tmp/deploy.tar.gz -C ${{ secrets.SERVER_DEPLOY_PATH }} && \
             rm /tmp/deploy.tar.gz && \
             cd ${{ secrets.SERVER_DEPLOY_PATH }} && \
             pnpm install --prod && \
-            pm2 reload ecosystem.config.js"
+            pm2 reload ecosystem.config.js || pm2 start ecosystem.config.js"
