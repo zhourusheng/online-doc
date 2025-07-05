@@ -10,7 +10,8 @@
     "build:frontend": "cd frontend && pnpm build",
     "build:backend": "cd backend && pnpm build",
     "build": "pnpm --recursive run build",
-    "start": "cd backend && pnpm start"
+    "start": "cd backend && pnpm start",
+    "pull": "git pull origin main"
   },
   "keywords": [
     "collaborative",
