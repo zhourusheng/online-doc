@@ -50,14 +50,14 @@ jobs:
           ls -la backend/dist/
           
       - name: Deploy to Server
-        uses: easingthemes/ssh-deploy@main
+        uses: appleboy/scp-action@v0.1.7
         with:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          ARGS: "-avz --delete"
-          SOURCE: "frontend/dist/ backend/dist/ package.json pnpm-lock.yaml pnpm-workspace.yaml"
-          REMOTE_HOST: ${{ secrets.SERVER_HOST }}
-          REMOTE_USER: ${{ secrets.SERVER_USERNAME }}
-          TARGET: ${{ secrets.SERVER_DEPLOY_PATH }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "frontend/dist/,backend/dist/,package.json,pnpm-lock.yaml,pnpm-workspace.yaml"
+          target: ${{ secrets.SERVER_DEPLOY_PATH }}
+          strip_components: 0
           
       - name: Restart application
         uses: appleboy/ssh-action@v1.0.3
