@@ -60,6 +60,7 @@ import { useDocumentStore } from '@/stores/document'
 import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { getWsUrl } from '../utils/env'
 
 const props = defineProps<{
   documentId: string;
@@ -139,7 +140,7 @@ const setupWebSocketConnection = () => {
     
     // 连接到 WebSocket 服务器
     provider = new WebsocketProvider(
-      import.meta.env.VITE_WS_URL || 'ws://localhost:3001', 
+      getWsUrl(), 
       `document-${props.documentId}`, 
       ydoc,
       { params }

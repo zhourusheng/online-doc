@@ -1,10 +1,11 @@
 import axios from 'axios';
 import { useUserStore } from '../stores/user';
 import { getRouter } from './router-helper';
+import { getApiUrl } from './env';
 
 // 创建axios实例
 const request = axios.create({
-  baseURL: '',
+  baseURL: getApiUrl(),
   timeout: 30000,
 });
 
